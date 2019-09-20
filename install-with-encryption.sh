@@ -77,6 +77,8 @@ EOM
 
 post_install_steps() {
 
+  set_fde_uuid_vars
+
   echo "Mounting target install partitions"
 
   # chroot into the target
@@ -128,13 +130,15 @@ EOM
   keyfile=/target/keys/cryptodisk.key
   # NB: keyfile location is hardcoded in loadinitramfskey.sh hook as /keys/cryptodisk.key
   if [ -e "$keyfile" ]; then
-    echo "Keyfile $keyfile already exists. Aborting!"
-    return 20
+    echo "Keyfile $keyfile already exists!"
+    ls -l "$keyfile"
+    read -r -p "Press enter to continue with existing keyfile anyway!"
+  else
+    run touch "$keyfile"
+    run chmod 000 "$keyfile"
+    run head -c 64 /dev/urandom > "$keyfile"
   fi
-  run touch "$keyfile"
-  run chmod 000 "$keyfile"
-  run head -c 64 /dev/urandom > "$keyfile"
-  run cryptsetup luksAddKey "/dev/mapper/$unlocked_luks_basename" "$keyfile"
+  run cryptsetup luksAddKey "$fde_dev" "$keyfile"
   echo "Added key to luks volume"
 
   # We could use /bin/cat as keyscript, but this one is a wrapper that will
@@ -146,7 +150,8 @@ EOM
 
   # TODO: do we need to add the UUID to /etc/default/grub GRUB_CMDLINE_LINUX="cryptodevice=<uuid>:<unlocked_luks_basename>" ?
 
-  run chroot /target bash -c 'set -eux; update-grub; update-initramfs -u'
+  run chroot /target update-grub
+  run chroot /target update-initramfs -u
 
 }
 
