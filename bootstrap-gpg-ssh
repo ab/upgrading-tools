@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+
+run() {
+  echo >&2 "+ $*"
+  "$@"
+}
+
+if ! run dpkg -l scdaemon; then
+  run sudo add-apt-repository universe
+
+  run sudo apt update
+
+  run sudo apt install -y vim scdaemon
+fi
+
+mkdir -vp ~/.ssh
+if [ ! -e ~/.ssh/known_hosts ]; then
+  run tee ~/.ssh/known_hosts <<EOM
+github.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==
+EOM
+fi
+
+mkdir -vp ~/.gnupg
+
+if [ -e ~/.gnupg/gpg-agent.conf ]; then
+  if ! grep "enable-ssh-support" ~/.gnupg/gpg-agent.conf >/dev/null; then
+    echo >&2 "WARNING: enable-ssh-support not found in ~/.gnupg/gpg-agent.conf"
+    read -p "Please correct this? Press enter to continue..."
+  fi
+else
+  echo "Creating gpg-agent.conf"
+  run tee ~/.gnupg/gpg-agent.conf <<EOM
+# act as ssh agent
+enable-ssh-support
+EOM
+fi
+
+while ! run gpg --card-status; do
+  echo >&2 "Could not find a connected smart card. Unplug and replug?"
+  read -p "Press enter to continue..."
+done
+
+echo "Smart card connected!"
+
+SSH_AUTH_SOCK="$(run gpgconf --list-dirs agent-ssh-socket)"
+export SSH_AUTH_SOCK
+
+echo "Command to run:"
+echo "export SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+echo
+
+read -r -p "Would you like me to add to ~/.bashrc ? [y/N] " ans
+case "$ans" in
+  y|Y|yes|YES)
+    ;;
+  *)
+    echo "OK, all done."
+    exit
+    ;;
+esac
+
+run tee -a ~/.bashrc <<'EOM'
+
+# Use gpg-agent as SSH agent
+SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
+export SSH_AUTH_SOCK
+EOM

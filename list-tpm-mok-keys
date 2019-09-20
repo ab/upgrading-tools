@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eux
+
+echo >&2 "shim-signed installs MOK keys in /var/lib/shim-signed/mok/"
+
+mokutil --list-enrolled
