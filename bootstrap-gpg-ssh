@@ -6,7 +6,7 @@ run() {
   "$@"
 }
 
-if ! run dpkg -l scdaemon; then
+if ! run dpkg -s scdaemon >/dev/null ; then
   run sudo add-apt-repository universe
 
   run sudo apt update
