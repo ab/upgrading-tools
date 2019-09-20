@@ -123,6 +123,11 @@ EOM
   run cp -v "$(dirname "$0")/lib/loadinitramfskey.sh" /target/etc/initramfs-tools/hooks/loadinitramfskey.sh
   run cp -v "$(dirname "$0")/lib/getinitramfskey.sh" /target/lib/cryptsetup/scripts/getinitramfskey.sh
 
+  run tee /target/etc/initramfs-tools/conf.d/luks-umask.conf <<EOM
+# Make sure encryption key is not world readable in initramfs
+UMASK=0077
+EOM
+
   echo "Generating keyfile"
 
   # create a keyfile to unlock the main disk, which avoids double prompting in grub and in initramfs
@@ -151,7 +156,7 @@ EOM
   # TODO: do we need to add the UUID to /etc/default/grub GRUB_CMDLINE_LINUX="cryptodevice=<uuid>:<unlocked_luks_basename>" ?
 
   run chroot /target update-grub
-  run chroot /target update-initramfs -u
+  run chroot /target update-initramfs -u -k all
 
 }
 
