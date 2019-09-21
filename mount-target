@@ -1,0 +1,48 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  set -x
+  exec sudo -E "$0" "$@"
+fi
+
+target="${target-/target}"
+vgname="${vgname-main}"
+root_dev="${root_dev-/dev/mapper/main-root}"
+
+run() {
+  echo >&2 "+ $*"
+  "$@"
+}
+
+discover_efi_dev() {
+  local line dev
+  line="$(run blkid | grep 'EFI system partition')"
+  dev="$(echo "$line" | cut -f1 -d:)"
+  echo >&2 "Discovered EFI partition at $dev"
+  echo "$dev"
+}
+
+mkdir -vp "$target"
+
+if [ -n "$(ls "$target")" ]; then
+  echo >&2 "Error: $target is not empty:"
+  ls -l "$target"
+  exit 2
+fi
+
+efi_dev="$(discover_efi_dev)" && ret=$? || ret=$?
+if [ $ret -ne 0 ]; then
+  echo >&2 "Failed to find EFI system partition"
+  read -r -p "/dev/XXX path of EFI partition: " efi_dev
+fi
+
+run vgchange -ay "$vgname"
+
+run mount "$root_dev" "$target"
+
+run mount "$efi_dev" "$target/boot/efi"
+
+for fs in proc sys dev dev/pts run; do
+  run mount --bind "/$fs" "$target/$fs"
+done

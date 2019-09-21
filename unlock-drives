@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+
+run() {
+  local IFS
+  IFS=' '
+  echo >&2 "+ $*"
+  "$@"
+}
+
+usage() {
+  cat >&2 <<EOM
+usage: $0
+
+Unlock all luks partitions on a system using cryptsetup luksOpen.
+EOM
+}
+
+case "${1-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+  set -x
+  exec sudo "$0" "$@"
+fi
+
+# split on newlines, not spaces
+IFS=$'\n'
+for line in $(run blkid | grep 'TYPE="crypto_LUKS"'); do
+  uuid="$(grep -wo 'UUID=\S\+' <<< "$line" | tr -d '"' | cut -f2 -d=)"
+
+  echo "Decrypting partition with UUID $uuid:"
+  run lsblk "/dev/disk/by-uuid/$uuid"
+
+  run cryptsetup luksOpen "/dev/disk/by-uuid/$uuid" "luks-$uuid"
+done
+
+echo 'All done'
+
