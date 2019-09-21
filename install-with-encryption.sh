@@ -47,7 +47,7 @@ pre_install_steps() {
 
   read -p "Press enter to DESTROY AND REFORMAT $fde_dev!!!!! "
 
-  run cryptsetup luksFormat "$fde_dev"
+  run cryptsetup luksFormat --type luks1 "$fde_dev"
 
   set_fde_uuid_vars
 
