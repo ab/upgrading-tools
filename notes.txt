@@ -1,4 +1,0 @@
-# Displaying EFI boot order / loaders
-efibootmgr -v
-
-
