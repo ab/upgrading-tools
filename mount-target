@@ -1,6 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
+# Mount target partitions under /target, suitable for running under a chroot.
+# This script is intended to be run from a live CD type environment when you
+# want to chroot into an installed OS environment, e.g. to fix /etc/crypttab.
+
+# This script pairs well with unlock-drives.
+#
+# boot dev will be discovered if partlabel is "boot"
+# EFI partition will be discovered if partlabel is "EFI system partition"
+
 if [ "$(id -u)" -ne 0 ]; then
   set -x
   exec sudo -E "$0" "$@"
@@ -15,11 +24,24 @@ run() {
   "$@"
 }
 
+list_partitions() {
+  lsblk -o path,type,partlabel,label
+  echo
+}
+
+discover_boot_dev() {
+  local line dev
+  line="$(run lsblk -r -o partlabel,path | grep '^boot ')"
+  dev="$(echo "$line" | cut -f2 -d' ')"
+  echo >&2 "Discovered boot partition by label at $dev"
+  echo "$dev"
+}
+
 discover_efi_dev() {
   local line dev
-  line="$(run blkid | grep 'EFI system partition')"
-  dev="$(echo "$line" | cut -f1 -d:)"
-  echo >&2 "Discovered EFI partition at $dev"
+  line="$(run lsblk -r -o partlabel,path | grep '^EFI\\x20system\\x20partition ')"
+  dev="$(echo "$line" | cut -f2 -d' ')"
+  echo >&2 "Discovered EFI partition by label at $dev"
   echo "$dev"
 }
 
@@ -31,15 +53,30 @@ if [ -n "$(ls "$target")" ]; then
   exit 2
 fi
 
+boot_dev="$(discover_boot_dev)" && ret=$? || ret=$?
+if [ $ret -ne 0 ]; then
+  list_partitions
+  echo >&2 "Failed to autodiscover boot partition"
+  echo >&2 "(If there is no separate boot partition, press enter to continue.)"
+  read -r -p "Full /dev/XXX path to boot partition: " boot_dev
+fi
+
 efi_dev="$(discover_efi_dev)" && ret=$? || ret=$?
 if [ $ret -ne 0 ]; then
-  echo >&2 "Failed to find EFI system partition"
-  read -r -p "/dev/XXX path of EFI partition: " efi_dev
+  list_partitions
+  echo >&2 "Failed to autodiscover EFI system partition"
+  read -r -p "Full /dev/XXX path to EFI partition: " efi_dev
 fi
 
 run vgchange -ay "$vgname"
 
 run mount "$root_dev" "$target"
+
+if [ -n "$boot_dev" ]; then
+  run mount "$boot_dev" "$target/boot"
+else
+  echo >&2 "No separate boot dev, as instructed"
+fi
 
 run mount "$efi_dev" "$target/boot/efi"
 

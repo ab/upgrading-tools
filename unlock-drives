@@ -28,13 +28,9 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
-# split on newlines, not spaces
-IFS=$'\n'
-for line in $(run blkid | grep 'TYPE="crypto_LUKS"'); do
-  uuid="$(grep -wo 'UUID=\S\+' <<< "$line" | tr -d '"' | cut -f2 -d=)"
-
+for uuid in $(lsblk -r -o fstype,uuid | grep ^crypto_LUKS | cut -f2 -d' '); do
   echo "Decrypting partition with UUID $uuid:"
-  run lsblk "/dev/disk/by-uuid/$uuid"
+  run lsblk -o name,size,fstype,partlabel,label,uuid "/dev/disk/by-uuid/$uuid"
 
   run cryptsetup luksOpen "/dev/disk/by-uuid/$uuid" "luks-$uuid"
 done
